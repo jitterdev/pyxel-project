@@ -2,6 +2,7 @@ import pyxel
 import pymunk
 import random
 import threading
+import math
 
 
 steps = 60 # setting this higher than 60 breaks the line drawing a lot in unpredictable ways
@@ -137,12 +138,16 @@ class Rectangle(Shape):
         super().__init__(x, y, space)
         self.shape = pymunk.Poly.create_box(self.body, (width, height))
         self.shape.density = .05
+        self.shape.mass = 1.0
         self.shape.elasticity = 0.8
         self.width = width
         self.height = height
         self.space.add(self.shape)
+        self.body.moment = pymunk.moment_for_box(self.shape.mass, (width, height))
+        self.angle = 0
     def draw(self):
         x, y = self.body.position
+        angle = math.degrees(self.body.angle)
         width = self.width
         height = self.height
         
@@ -158,7 +163,27 @@ class Rectangle(Shape):
             y = pyxel.height - height/2
         
         self.body.position = x, y
-        pyxel.rect(x - width/2, y - height/2, width, height, self.color)
+
+        # Compute vertices of rotated rectangle
+        x1, y1 = -width/2, -height/2
+        x2, y2 = width/2, -height/2
+        x3, y3 = width/2, height/2
+        x4, y4 = -width/2, height/2
+        
+        cx, cy = x, y
+        ca, sa = math.cos(self.body.angle), math.sin(self.body.angle)
+        
+        x1r, y1r = cx + ca * x1 - sa * y1, cy + sa * x1 + ca * y1
+        x2r, y2r = cx + ca * x2 - sa * y2, cy + sa * x2 + ca * y2
+        x3r, y3r = cx + ca * x3 - sa * y3, cy + sa * x3 + ca * y3
+        x4r, y4r = cx + ca * x4 - sa * y4, cy + sa * x4 + ca * y4
+        
+        # Draw the rotated rectangle
+        pyxel.line(x1r, y1r, x2r, y2r, self.color)
+        pyxel.line(x2r, y2r, x3r, y3r, self.color)
+        pyxel.line(x3r, y3r, x4r, y4r, self.color)
+        pyxel.line(x4r, y4r, x1r, y1r, self.color)
+
 class App:
     def __init__(self):
         pyxel.init(640, 480, fps=steps)
@@ -193,8 +218,9 @@ class App:
             'app': self,
             'shapes': self.shapes
         }
-        # rect = Rectangle(random.randint(50,590), random.randint(50,430), 30, 30, self.space)
-        # self.shapes.append(rect)
+        # for _ in range(50):
+        #     rect = Rectangle(random.randint(50,590), random.randint(50,430), random.randint(20,40), random.randint(20,40), self.space)
+        #     self.shapes.append(rect)
         pyxel.run(self.update, self.draw)
 
     def update(self):
