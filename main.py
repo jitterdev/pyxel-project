@@ -113,7 +113,7 @@ class Constraint:
     def draw(self):
         pass
 
-class DampedRotarySpring(Constraint):
+class DampedRotarySpring(Constraint): # DampedRotarySpring works like the DammpedSpring but in a angular fashion.
     def __init__(self, body_a, body_b, rest_angle, stiffness, dampness, space):
         super().__init__(body_a, body_b, space)
         self.rest_angle = rest_angle
@@ -122,7 +122,7 @@ class DampedRotarySpring(Constraint):
         self.create_constraint()
     def create_constraint(self):
         self.constraint = pymunk.DampedRotarySpring(self.body_a, self.body_b, self.rest_angle, self.stiffness, self.dampness)
-class DampedSpring(Constraint):
+class DampedSpring(Constraint): # The spring allows you to define the rest length, stiffness and damping.
     def __init__(self, body_a, body_b, anchor_a, anchor_b, rest_length, stiffness, dampness, space):
         super().__init__(body_a, body_b, space)
         self.anchor_a = anchor_a
@@ -134,16 +134,16 @@ class DampedSpring(Constraint):
     def create_constraint(self):
         self.constraint = pymunk.DampedSpring(self.body_a, self.body_b, self.anchor_a, self.anchor_b, self.rest_angle, self.stiffness, self.dampness)
 
-class GearJoint(Constraint):
+class GearJoint(Constraint): # GearJoint keeps the angular velocity ratio of a pair of bodies constant.
     def __init__(self, body_a, body_b, phase, ratio, space):
         super().__init__(body_a, body_b, space)
         self.phase = phase
-        self.ratio = ratio
+        self.ratio = ratio # ratio is always measured in absolute terms. It is currently not possible to set the ratio in relation to a third body’s angular velocity. phase is the initial angular offset of the two bodies.
         self.create_constraint()
     def create_constraint(self):
         self.constraint = pymunk.GearJoint(self.body_a, self.body_b, self.phase, self.ratio)
 
-class GrooveJoint(Constraint):
+class GrooveJoint(Constraint): # GrooveJoint is similar to a PivotJoint, but with a linear slide. One of the anchor points is a line segment that the pivot can slide in instead of being fixed.
     def __init__(self, body_a, body_b, groove_a, groove_b, anchor_b, space):
         super().__init__(body_a, body_b, space)
         self.groove_a = groove_a
@@ -153,16 +153,16 @@ class GrooveJoint(Constraint):
     def create_constraint(self):
         self.constraint = pymunk.GrooveJoint(self.body_a, self.body_b, self.groove_a, self.groove_b, self.anchor_b)
 
-class PinJoint(Constraint):
+class PinJoint(Constraint): # PinJoint links shapes with a solid bar or pin. Keeps the anchor points at a set distance from one another.
     def __init__(self, body_a, body_b, anchor_a, anchor_b, space):
         super().__init__(body_a, body_b, space)
         self.anchor_a = anchor_a
         self.anchor_b = anchor_b
         self.create_constraint()
     def create_constraint(self):
-        self.constraint = pymunk.PinJoint(self.body_a, self.body_b, self.anchor_a, self.anchor_b, self.anchor)
+        self.constraint = pymunk.PinJoint(self.body_a, self.body_b, self.anchor_a, self.anchor_b)
 
-class PivotJoint(Constraint):
+class PivotJoint(Constraint): # PivotJoint allow two objects to pivot about a single point. It's like a swivel.
     def __init__(self, body_a, body_b, pivot, space):
         super().__init__(body_a, body_b, space)
         self.pivot = pivot
@@ -170,33 +170,33 @@ class PivotJoint(Constraint):
     def create_constraint(self):
         self.constraint = pymunk.PivotJoint(self.body_a, self.body_b, self.pivot)
 
-class RatchetJoint(Constraint):
+class RatchetJoint(Constraint): # RatchetJoint is a rotary ratchet, it works like a socket wrench.
     def __init__(self, body_a, body_b, phase, ratchet, space):
         super().__init__(body_a, body_b, space)
-        self.phase = phase
-        self.ratchet = ratchet
+        self.phase = phase # phase is the initial offset to use when deciding where the ratchet angles are.
+        self.ratchet = ratchet # ratchet is the distance between "clicks"
         self.create_constraint()
     def create_constraint(self):
         self.constraint = pymunk.RatchetJoint(self.body_a, self.body_b, self.phase, self.ratchet)
 
-class RotaryLimitJoint(Constraint):
+class RotaryLimitJoint(Constraint): # RotaryLimitJoint constrains the relative rotations of two bodies.
     def __init__(self, body_a, body_b, min, max, space):
         super().__init__(body_a, body_b, space)
-        self.min = min
+        self.min = min # min and max are the angular limits in radians. It is implemented so that it’s possible to for the range to be greater than a full revolution.
         self.max = max
         self.create_constraint()
     def create_constraint(self):
         self.constraint = pymunk.RotaryLimitJoint(self.body_a, self.body_b, self.min, self.max)
 
-class SimpleMotor(Constraint):
+class SimpleMotor(Constraint): # SimpleMotor keeps the relative angular velocity constant.
     def __init__(self, body_a, body_b, rate, space):
         super().__init__(body_a, body_b, space)
-        self.rate = rate
+        self.rate = rate # rate is the desired relative angular velocity. You will usually want to set an force (torque) maximum for motors as otherwise they will be able to apply a nearly infinite torque to keep the bodies moving.
         self.create_constraint()
     def create_constraint(self):
         self.constraint = pymunk.SimpleMotor(self.body_a, self.body_b, self.rate)
 
-class SlideJoint(Constraint):
+class SlideJoint(Constraint): # SlideJoint is like a PinJoint, but with a minimum and maximum distance. A chain could be modeled using this joint. It keeps the anchor points from getting to far apart, but will allow them to get closer together.
     def __init__(self, body_a, body_b, anchor_a, anchor_b, space):
         super().__init__(body_a, body_b, space)
         self.anchor_a = anchor_a
