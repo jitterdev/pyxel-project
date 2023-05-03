@@ -95,6 +95,116 @@ keyToFunction = {
     pyxel.MOUSE_BUTTON_LEFT: lambda **kwargs: leftClick(**kwargs),
 }
 
+class Constraint:
+    def __init__(self, body_a, body_b, space):
+        self.constraint = None
+        self.body_a = body_a
+        self.body_b = body_b
+        self.space = space
+    def create_constraint(self):
+        raise NotImplementedError("create_constraint method must be implemented in subclass")
+    
+    def add_to_space(self):
+        self.space.add(self.constraint)
+    
+    def remove_from_space(self):
+        self.space.remove(self.constraint)
+
+    def draw(self):
+        pass
+
+class DampedRotarySpring(Constraint):
+    def __init__(self, body_a, body_b, rest_angle, stiffness, dampness, space):
+        super().__init__(body_a, body_b, space)
+        self.rest_angle = rest_angle
+        self.stiffness = stiffness
+        self.dampness = dampness
+        self.create_constraint()
+    def create_constraint(self):
+        self.constraint = pymunk.DampedRotarySpring(self.body_a, self.body_b, self.rest_angle, self.stiffness, self.dampness)
+class DampedSpring(Constraint):
+    def __init__(self, body_a, body_b, anchor_a, anchor_b, rest_length, stiffness, dampness, space):
+        super().__init__(body_a, body_b, space)
+        self.anchor_a = anchor_a
+        self.anchor_b = anchor_b
+        self.rest_angle = rest_length
+        self.stiffness = stiffness
+        self.dampness = dampness
+        self.create_constraint()
+    def create_constraint(self):
+        self.constraint = pymunk.DampedSpring(self.body_a, self.body_b, self.anchor_a, self.anchor_b, self.rest_angle, self.stiffness, self.dampness)
+
+class GearJoint(Constraint):
+    def __init__(self, body_a, body_b, phase, ratio, space):
+        super().__init__(body_a, body_b, space)
+        self.phase = phase
+        self.ratio = ratio
+        self.create_constraint()
+    def create_constraint(self):
+        self.constraint = pymunk.GearJoint(self.body_a, self.body_b, self.phase, self.ratio)
+
+class GrooveJoint(Constraint):
+    def __init__(self, body_a, body_b, groove_a, groove_b, anchor_b, space):
+        super().__init__(body_a, body_b, space)
+        self.groove_a = groove_a
+        self.groove_b = groove_b
+        self.anchor_b = anchor_b
+        self.create_constraint()
+    def create_constraint(self):
+        self.constraint = pymunk.GrooveJoint(self.body_a, self.body_b, self.groove_a, self.groove_b, self.anchor_b)
+
+class PinJoint(Constraint):
+    def __init__(self, body_a, body_b, anchor_a, anchor_b, space):
+        super().__init__(body_a, body_b, space)
+        self.anchor_a = anchor_a
+        self.anchor_b = anchor_b
+        self.create_constraint()
+    def create_constraint(self):
+        self.constraint = pymunk.PinJoint(self.body_a, self.body_b, self.anchor_a, self.anchor_b, self.anchor)
+
+class PivotJoint(Constraint):
+    def __init__(self, body_a, body_b, pivot, space):
+        super().__init__(body_a, body_b, space)
+        self.pivot = pivot
+        self.create_constraint()
+    def create_constraint(self):
+        self.constraint = pymunk.PivotJoint(self.body_a, self.body_b, self.pivot)
+
+class RatchetJoint(Constraint):
+    def __init__(self, body_a, body_b, phase, ratchet, space):
+        super().__init__(body_a, body_b, space)
+        self.phase = phase
+        self.ratchet = ratchet
+        self.create_constraint()
+    def create_constraint(self):
+        self.constraint = pymunk.RatchetJoint(self.body_a, self.body_b, self.phase, self.ratchet)
+
+class RotaryLimitJoint(Constraint):
+    def __init__(self, body_a, body_b, min, max, space):
+        super().__init__(body_a, body_b, space)
+        self.min = min
+        self.max = max
+        self.create_constraint()
+    def create_constraint(self):
+        self.constraint = pymunk.RotaryLimitJoint(self.body_a, self.body_b, self.min, self.max)
+
+class SimpleMotor(Constraint):
+    def __init__(self, body_a, body_b, rate, space):
+        super().__init__(body_a, body_b, space)
+        self.rate = rate
+        self.create_constraint()
+    def create_constraint(self):
+        self.constraint = pymunk.SimpleMotor(self.body_a, self.body_b, self.rate)
+
+class SlideJoint(Constraint):
+    def __init__(self, body_a, body_b, anchor_a, anchor_b, space):
+        super().__init__(body_a, body_b, space)
+        self.anchor_a = anchor_a
+        self.anchor_b = anchor_b
+        self.create_constraint()
+    def create_constraint(self):
+        self.constraint = pymunk.SlideJoint(self.body_a, self.body_b, self.anchor_a, self.anchor_b)
+
 class Shape:
     def __init__(self, x, y, space):
         self.body = pymunk.Body(body_type=pymunk.Body.DYNAMIC)
@@ -173,16 +283,19 @@ class Rectangle(Shape):
         cx, cy = x, y
         ca, sa = math.cos(self.body.angle), math.sin(self.body.angle)
         
+        # Rotate vertices around the center of the rectangle
         x1r, y1r = cx + ca * x1 - sa * y1, cy + sa * x1 + ca * y1
         x2r, y2r = cx + ca * x2 - sa * y2, cy + sa * x2 + ca * y2
         x3r, y3r = cx + ca * x3 - sa * y3, cy + sa * x3 + ca * y3
         x4r, y4r = cx + ca * x4 - sa * y4, cy + sa * x4 + ca * y4
         
         # Draw the rotated rectangle
-        pyxel.line(x1r, y1r, x2r, y2r, self.color)
-        pyxel.line(x2r, y2r, x3r, y3r, self.color)
-        pyxel.line(x3r, y3r, x4r, y4r, self.color)
-        pyxel.line(x4r, y4r, x1r, y1r, self.color)
+        vertices = [(x1r, y1r), (x2r, y2r), (x3r, y3r), (x4r, y4r)]
+        for i in range(4):
+            x1, y1 = vertices[i]
+            x2, y2 = vertices[(i+1)%4]
+            pyxel.line(x1, y1, x2, y2, self.color)
+
 
 class App:
     def __init__(self):
