@@ -1,7 +1,7 @@
 import pyxel
 import pymunk
 import random
-import threading
+import time
 import math
 
 
@@ -19,19 +19,17 @@ def debounce(wait_time):
     """
 
     def decorator(function):
+        last_call = 0
         def debounced(*args, **kwargs):
-            def call_function():
-                debounced._timer = None
-                return function(*args, **kwargs)
-            # if we already have a call to the function currently waiting to be executed, reset the timer
-            if debounced._timer is not None:
-                debounced._timer.cancel()
+            nonlocal last_call
+            current_time = time.time()
+            elapsed_time = current_time - last_call
+            if elapsed_time < wait_time:
+                # not enough time has passed since the last call to the function
+                return
+            last_call = current_time
+            return function(*args, **kwargs)
 
-            # after wait_time, call the function provided to the decorator with its arguments
-            debounced._timer = threading.Timer(wait_time, call_function)
-            debounced._timer.start()
-
-        debounced._timer = None
         return debounced
 
     return decorator
@@ -91,7 +89,7 @@ keyToFunction = {
     pyxel.KEY_LEFT: lambda **kwargs: localImpulse(-10, 0, **kwargs),
     pyxel.KEY_RIGHT: lambda **kwargs: localImpulse(10, 0, **kwargs),
     pyxel.KEY_1: lambda **kwargs: randomizeColor(**kwargs),
-    pyxel.KEY_SPACE: debounced_toggle_run_physics, # this works right now but its really cursed, it basically delays the actual toggle by 0.5 seconds as well
+    pyxel.KEY_SPACE: debounced_toggle_run_physics,
     pyxel.MOUSE_BUTTON_LEFT: lambda **kwargs: leftClick(**kwargs),
 }
 
