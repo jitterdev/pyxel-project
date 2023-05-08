@@ -56,32 +56,60 @@ def randomizeColor(**kwargs):
     for shape in kwargs['shapes']:
         shape.color = random.randint(0,15)
 
-def leftClick(**kwargs):
-        self = kwargs['app']
-        if pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
-            self.point1 = True
-            self.point2 = False
-            global x1, y1
-            x1, y1 = pyxel.mouse_x, pyxel.mouse_y
-        if pyxel.btnr(pyxel.MOUSE_BUTTON_LEFT):
-            self.point2 = True
-            global x2, y2
-            x2, y2 = pyxel.mouse_x, pyxel.mouse_y
-            wall_body = pymunk.Body(body_type=pymunk.Body.STATIC)
-            line = pymunk.Segment(wall_body, (x1, y1), (x2, y2), 1)
-            line.elasticity = 0.8
-            self.space.add(wall_body, line)
-            self.lines.append(line)
-            if len(self.lines) > self.MAX_LINES:
-                # Remove oldest line segment from space and lines list
-                oldest_line = self.lines.pop(0) 
-                self.space.remove(oldest_line.body, oldest_line)
-        if self.point1:
-            pyxel.circ(x1, y1, 2, 8)
-        if self.point2:
-            pyxel.circ(x2, y2, 2, 5)
-            pyxel.line(x1, y1, x2, y2, 7)
 
+def line(**kwargs):
+    self = kwargs['app']
+    if pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
+        print('down')
+        self.point1 = True
+        self.point2 = False
+        global x1, y1
+        x1, y1 = pyxel.mouse_x, pyxel.mouse_y
+    if self.point1 and not pyxel.btn(pyxel.MOUSE_BUTTON_LEFT):
+        print('dragged')
+        self.point2 = True
+        global x2, y2
+        x2, y2 = pyxel.mouse_x, pyxel.mouse_y
+    if self.point1 and self.point2:
+        print('up')
+        wall_body = pymunk.Body(body_type=pymunk.Body.STATIC)
+        line = pymunk.Segment(wall_body, (x1, y1), (x2, y2), 1)
+        line.elasticity = 0.8
+        self.space.add(wall_body, line)
+        self.lines.append(line)
+        if len(self.lines) > self.MAX_LINES:
+            # Remove oldest line segment from space and lines list
+            oldest_line = self.lines.pop(0) 
+            self.space.remove(oldest_line.body, oldest_line)
+        self.point1 = False
+        self.point2 = False
+
+
+
+modeToFunction = {
+    'line': lambda **kwargs: line(**kwargs),
+}
+
+def leftClick(**kwargs):
+    mode = kwargs['app'].clickMode
+    for key, function in modeToFunction.items():
+        if key == mode:
+            function(**kwargs)
+
+keyToClickMode = {
+    pyxel.KEY_Z: 'line',
+    pyxel.KEY_X: 'circle',
+    pyxel.KEY_C: 'rectangle',
+    pyxel.KEY_V: 'triangle',
+    pyxel.KEY_B: 'constraint',
+    pyxel.KEY_0: None
+}
+
+def changeClickMode(**kwargs):
+    self = kwargs['app']
+    for key, mode in keyToClickMode.items():
+        if key == kwargs['key']:
+            self.clickMode = mode
 
 keyToFunction = {
     pyxel.KEY_UP: lambda **kwargs: localImpulse(0, -20, **kwargs),
@@ -90,6 +118,7 @@ keyToFunction = {
     pyxel.KEY_RIGHT: lambda **kwargs: localImpulse(10, 0, **kwargs),
     pyxel.KEY_1: lambda **kwargs: randomizeColor(**kwargs),
     pyxel.KEY_SPACE: debounced_toggle_run_physics,
+    tuple(keyToClickMode.keys()): lambda **kwargs: changeClickMode(**kwargs),
     pyxel.MOUSE_BUTTON_LEFT: lambda **kwargs: leftClick(**kwargs),
 }
 
@@ -307,7 +336,7 @@ class App:
         self.color = 11
         self.lines = []
         self.MAX_LINES = 3
-
+        self.clickMode = None
         # create walls
         wall_body = pymunk.Body(body_type=pymunk.Body.STATIC)
         self.walls = [
@@ -327,7 +356,8 @@ class App:
         self.args = {
             'color': self.color,
             'app': self,
-            'shapes': self.shapes
+            'shapes': self.shapes,
+            'key': None
         }
         # for _ in range(50):
         #     rect = Rectangle(random.randint(50,590), random.randint(50,430), random.randint(20,40), random.randint(20,40), self.space)
@@ -336,8 +366,14 @@ class App:
 
     def update(self):
         for key, function in keyToFunction.items():
-            if pyxel.btn(key):
-                function(**self.args)
+            if type(key) == tuple:
+                for key in key:
+                    if pyxel.btn(key) or pyxel.btnr(key):
+                        self.args['key'] = key
+                        function(**self.args)
+            else:
+                if pyxel.btn(key) or pyxel.btnr(key):
+                    function(**self.args)
         # print(self.run_physics)
         if self.run_physics:
             for _ in range(steps): # move simulation forward 0.1 seconds:
@@ -348,19 +384,24 @@ class App:
         for shape in self.shapes:
             shape.draw()
             # print_mass_moment(shape.body)
-        hovered_body = get_hovered_body(self.space)
-        if hovered_body:
-            # pyxel.rect(*hovered_body.position, 10, 10, 9)
-            pass
-        leftClick(**self.args)
+        # hovered_body = get_hovered_body(self.space)
+        # if hovered_body:
+        #     # pyxel.rect(*hovered_body.position, 10, 10, 9)
+        #     pass
 
         pyxel.text(5, 30, ','.join((str(x) for x in [pyxel.mouse_x, pyxel.mouse_y])), pyxel.COLOR_YELLOW)
-
+        pyxel.text(600, 440, 'None' if self.clickMode is None else self.clickMode, 7)
+        
         for wall in self.walls:
             body = wall.body
             p1 = body.position + wall.a.rotated(body.angle)
             p2 = body.position + wall.b.rotated(body.angle)
             pyxel.line(p1[0], p1[1], p2[0], p2[1], 7)
+            
+        if self.point1:
+            pyxel.circ(x1, y1, 2, 8)
+        if self.point2:
+            pyxel.circ(x2, y2, 2, 5)
 
         # Draw existing lines
         for line in self.lines:
