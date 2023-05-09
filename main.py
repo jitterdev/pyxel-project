@@ -60,18 +60,15 @@ def randomizeColor(**kwargs):
 def line(**kwargs):
     self = kwargs['app']
     if pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
-        print('down')
         self.point1 = True
         self.point2 = False
         global x1, y1
         x1, y1 = pyxel.mouse_x, pyxel.mouse_y
     if self.point1 and not pyxel.btn(pyxel.MOUSE_BUTTON_LEFT):
-        print('dragged')
         self.point2 = True
         global x2, y2
         x2, y2 = pyxel.mouse_x, pyxel.mouse_y
     if self.point1 and self.point2:
-        print('up')
         wall_body = pymunk.Body(body_type=pymunk.Body.STATIC)
         line = pymunk.Segment(wall_body, (x1, y1), (x2, y2), 1)
         line.elasticity = 0.8
@@ -84,41 +81,94 @@ def line(**kwargs):
         self.point1 = False
         self.point2 = False
 
+def circle(**kwargs):
+    self = kwargs['app']
+    if pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
+        self.point1 = True
+        self.point2 = False
+        global x1, y1
+        x1, y1 = pyxel.mouse_x, pyxel.mouse_y
+    if self.point1 and not pyxel.btn(pyxel.MOUSE_BUTTON_LEFT):
+        self.point2 = True
+        global x2, y2
+        x2, y2 = pyxel.mouse_x, pyxel.mouse_y
+    if self.point1 and self.point2:
+        radius = math.dist((x1, y1), (x2, y2))
+        circle = Circle(pyxel.mouse_x, pyxel.mouse_y, radius, self.space)
+        self.shapes.append(circle)
+        self.point1 = False
+        self.point2 = False
 
 
 modeToFunction = {
-    'line': lambda **kwargs: line(**kwargs),
+    'create': {
+        'line': lambda **kwargs: line(**kwargs),
+        'circle': lambda **kwargs: circle(**kwargs),
+    },
+    'edit': {},
+    'delete': {},
 }
 
 def leftClick(**kwargs):
-    mode = kwargs['app'].clickMode
-    for key, function in modeToFunction.items():
-        if key == mode:
-            function(**kwargs)
+    mode = kwargs['app'].mode
+    submode = kwargs['app'].subMode
+    for dict_mode, submodes in modeToFunction.items():
+        if dict_mode == mode:
+            for dict_submode, function in submodes.items():
+                if dict_submode == submode:
+                    function(**kwargs)
 
-keyToClickMode = {
-    pyxel.KEY_Z: 'line',
-    pyxel.KEY_X: 'circle',
-    pyxel.KEY_C: 'rectangle',
-    pyxel.KEY_V: 'triangle',
-    pyxel.KEY_B: 'constraint',
-    pyxel.KEY_0: None
+submodes = {
+    'create': {
+        pyxel.KEY_Z: 'line',
+        pyxel.KEY_X: 'circle',
+        pyxel.KEY_C: 'rectangle',
+        pyxel.KEY_V: 'triangle',
+        pyxel.KEY_B: 'constraint',
+        pyxel.KEY_0: None
+    },
+    'edit': {},
+    'delete': {}
 }
 
-def changeClickMode(**kwargs):
+
+modes = {
+    pyxel.KEY_1: 'create',
+    pyxel.KEY_2: 'edit',
+    pyxel.KEY_3: 'delete',
+}
+
+def changeSubMode(**kwargs):
     self = kwargs['app']
-    for key, mode in keyToClickMode.items():
+    for mode, submode in submodes.items():
+        if self.mode == mode:
+            for key, submode in submode.items():
+                if key == kwargs['key']:
+                    self.subMode = submode
+
+def changeMode(**kwargs):
+    self = kwargs['app']
+    for key, mode in modes.items():
         if key == kwargs['key']:
-            self.clickMode = mode
+            self.mode = mode
+            self.subMode = None
+
+def chain(*iterables):
+    for it in iterables:
+        for each in it:
+            yield each
+
+
 
 keyToFunction = {
     pyxel.KEY_UP: lambda **kwargs: localImpulse(0, -20, **kwargs),
     pyxel.KEY_DOWN: lambda **kwargs: localImpulse(0, 20, **kwargs),
     pyxel.KEY_LEFT: lambda **kwargs: localImpulse(-10, 0, **kwargs),
     pyxel.KEY_RIGHT: lambda **kwargs: localImpulse(10, 0, **kwargs),
-    pyxel.KEY_1: lambda **kwargs: randomizeColor(**kwargs),
+    # pyxel.KEY_1: lambda **kwargs: randomizeColor(**kwargs),
     pyxel.KEY_SPACE: debounced_toggle_run_physics,
-    tuple(keyToClickMode.keys()): lambda **kwargs: changeClickMode(**kwargs),
+    tuple(modes.keys()): lambda **kwargs: changeMode(**kwargs),
+    tuple(key for submode in submodes.values() for key in submode.keys()): lambda **kwargs: changeSubMode(**kwargs),
     pyxel.MOUSE_BUTTON_LEFT: lambda **kwargs: leftClick(**kwargs),
 }
 
@@ -336,7 +386,8 @@ class App:
         self.color = 11
         self.lines = []
         self.MAX_LINES = 3
-        self.clickMode = None
+        self.mode = None
+        self.subMode = None
         # create walls
         wall_body = pymunk.Body(body_type=pymunk.Body.STATIC)
         self.walls = [
@@ -350,7 +401,7 @@ class App:
             wall.friction = 0.8
         self.space.add(wall_body, *self.walls)
         self.shapes = []
-        for _ in range(200):
+        for _ in range(100):
             circle = Circle(random.randint(50,590), random.randint(50,430), random.randint(5,15), self.space)
             self.shapes.append(circle)
         self.args = {
@@ -390,7 +441,8 @@ class App:
         #     pass
 
         pyxel.text(5, 30, ','.join((str(x) for x in [pyxel.mouse_x, pyxel.mouse_y])), pyxel.COLOR_YELLOW)
-        pyxel.text(600, 440, 'None' if self.clickMode is None else self.clickMode, 7)
+        pyxel.text(600, 440, 'None' if self.mode is None else self.mode, 7)
+        pyxel.text(600, 450, 'None' if self.subMode is None else self.subMode, 7)
         
         for wall in self.walls:
             body = wall.body
