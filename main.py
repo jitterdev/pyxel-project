@@ -100,65 +100,64 @@ def circle(**kwargs):
         self.point2 = False
 
 
-modeToFunction = {
+actions = {
     'create': {
         'line': lambda **kwargs: line(**kwargs),
         'circle': lambda **kwargs: circle(**kwargs),
+        # 'rectangle': lambda **kwargs: rectangle(**kwargs),
+        # 'triangle': lambda **kwargs: triangle(**kwargs),
+        # 'constraint': lambda **kwargs: constraint(**kwargs),
+        'None': None
     },
-    'edit': {},
-    'delete': {},
+    'edit': {
+        'None': None
+    },
+    'delete': {
+        'None': None
+    }
 }
 
-def leftClick(**kwargs):
-    mode = kwargs['app'].mode
-    submode = kwargs['app'].subMode
-    for dict_mode, submodes in modeToFunction.items():
-        if dict_mode == mode:
-            for dict_submode, function in submodes.items():
-                if dict_submode == submode:
-                    function(**kwargs)
+modeKeys = {
+    pyxel.KEY_1: 'create',
+    pyxel.KEY_2: 'edit',
+    pyxel.KEY_3: 'delete',
+}
 
-submodes = {
+submodeKeys = {
     'create': {
         pyxel.KEY_Z: 'line',
         pyxel.KEY_X: 'circle',
         pyxel.KEY_C: 'rectangle',
         pyxel.KEY_V: 'triangle',
         pyxel.KEY_B: 'constraint',
-        pyxel.KEY_0: None
+        pyxel.KEY_0: 'None'
     },
     'edit': {},
     'delete': {}
 }
 
-
-modes = {
-    pyxel.KEY_1: 'create',
-    pyxel.KEY_2: 'edit',
-    pyxel.KEY_3: 'delete',
-}
-
+def leftClick(**kwargs):
+    mode = kwargs['app'].mode
+    submode = kwargs['app'].subMode
+    action = actions.get(mode, {})[submode]
+    if action:
+        action(**kwargs)
+    
 def changeSubMode(**kwargs):
     self = kwargs['app']
-    for mode, submode in submodes.items():
-        if self.mode == mode:
-            for key, submode in submode.items():
-                if key == kwargs['key']:
-                    self.subMode = submode
+    key = kwargs['key']
+    self.subMode = submodeKeys.get(self.mode, {}).get(key)
 
 def changeMode(**kwargs):
     self = kwargs['app']
-    for key, mode in modes.items():
-        if key == kwargs['key']:
-            self.mode = mode
-            self.subMode = None
-
-def chain(*iterables):
-    for it in iterables:
-        for each in it:
-            yield each
+    key = kwargs['key']
+    self.mode = modeKeys.get(key)
+    self.subMode = 'None'
 
 
+submodeKeySet = set()
+for submode_dict in submodeKeys.values():
+    submodeKeySet.update(submode_dict.keys())
 
 keyToFunction = {
     pyxel.KEY_UP: lambda **kwargs: localImpulse(0, -20, **kwargs),
@@ -167,8 +166,8 @@ keyToFunction = {
     pyxel.KEY_RIGHT: lambda **kwargs: localImpulse(10, 0, **kwargs),
     # pyxel.KEY_1: lambda **kwargs: randomizeColor(**kwargs),
     pyxel.KEY_SPACE: debounced_toggle_run_physics,
-    tuple(modes.keys()): lambda **kwargs: changeMode(**kwargs),
-    tuple(key for submode in submodes.values() for key in submode.keys()): lambda **kwargs: changeSubMode(**kwargs),
+    frozenset(modeKeys.keys()): lambda **kwargs: changeMode(**kwargs),
+    frozenset(submodeKeySet): lambda **kwargs: changeSubMode(**kwargs),
     pyxel.MOUSE_BUTTON_LEFT: lambda **kwargs: leftClick(**kwargs),
 }
 
@@ -417,7 +416,7 @@ class App:
 
     def update(self):
         for key, function in keyToFunction.items():
-            if type(key) == tuple:
+            if hasattr(key, '__iter__'):
                 for key in key:
                     if pyxel.btn(key) or pyxel.btnr(key):
                         self.args['key'] = key
