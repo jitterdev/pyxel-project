@@ -94,25 +94,54 @@ def circle(**kwargs):
         x2, y2 = pyxel.mouse_x, pyxel.mouse_y
     if self.point1 and self.point2:
         radius = math.dist((x1, y1), (x2, y2))
-        circle = Circle(pyxel.mouse_x, pyxel.mouse_y, radius, self.space)
+        circle = Circle(x1, y1, radius, self.space)
         self.shapes.append(circle)
         self.point1 = False
         self.point2 = False
 
+def rectangle(**kwargs):
+    self = kwargs['app']
+    if pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
+        self.point1 = True
+        self.point2 = False
+        global x1, y1
+        x1, y1 = pyxel.mouse_x, pyxel.mouse_y
+    if self.point1 and not pyxel.btn(pyxel.MOUSE_BUTTON_LEFT):
+        self.point2 = True
+        global x2, y2
+        x2, y2 = pyxel.mouse_x, pyxel.mouse_y
+    if self.point1 and self.point2:
+        width = math.dist([x1], [x2])
+        height = math.dist([y1], [y2])
+        x = (x1+x2)/2
+        y = (y1+y2)/2
+        rect = Rectangle(x, y, width, height, self.space)
+        self.shapes.append(rect)
+        self.point1 = False
+        self.point2 = False
+
+def delete(**kwargs):
+    self = kwargs['app']
+    if pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
+        hovered_body = get_hovered_body(self.space)
+        if hovered_body:
+            for shape in self.shapes:
+                if shape.body == hovered_body:
+                    self.space.remove(shape.shape)
+                    self.shapes.remove(shape)
+                    break
 
 actions = {
     'create': {
         'line': lambda **kwargs: line(**kwargs),
         'circle': lambda **kwargs: circle(**kwargs),
-        # 'rectangle': lambda **kwargs: rectangle(**kwargs),
+        'rectangle': lambda **kwargs: rectangle(**kwargs),
         # 'triangle': lambda **kwargs: triangle(**kwargs),
         # 'constraint': lambda **kwargs: constraint(**kwargs),
         'None': None
     },
     'edit': {
-        'None': None
-    },
-    'delete': {
+        'delete': lambda **kwargs: delete(**kwargs),
         'None': None
     }
 }
@@ -132,21 +161,24 @@ submodeKeys = {
         pyxel.KEY_B: 'constraint',
         pyxel.KEY_0: 'None'
     },
-    'edit': {},
-    'delete': {}
+    'edit': {
+        pyxel.KEY_Z: 'delete',
+        pyxel.KEY_0: 'None'
+    },
 }
 
 def leftClick(**kwargs):
     mode = kwargs['app'].mode
     submode = kwargs['app'].subMode
-    action = actions.get(mode, {})[submode]
-    if action:
+    if mode:
+        action = actions.get(mode, {})[submode]
         action(**kwargs)
     
 def changeSubMode(**kwargs):
     self = kwargs['app']
+    mode = kwargs['app'].mode
     key = kwargs['key']
-    self.subMode = submodeKeys.get(self.mode, {}).get(key)
+    self.subMode = submodeKeys.get(mode, {}).get(key)
 
 def changeMode(**kwargs):
     self = kwargs['app']
@@ -324,7 +356,6 @@ class Rectangle(Shape):
         super().__init__(x, y, space)
         self.shape = pymunk.Poly.create_box(self.body, (width, height))
         self.shape.density = .05
-        self.shape.mass = 1.0
         self.shape.elasticity = 0.8
         self.width = width
         self.height = height
@@ -400,7 +431,7 @@ class App:
             wall.friction = 0.8
         self.space.add(wall_body, *self.walls)
         self.shapes = []
-        for _ in range(100):
+        for _ in range(150):
             circle = Circle(random.randint(50,590), random.randint(50,430), random.randint(5,15), self.space)
             self.shapes.append(circle)
         self.args = {
@@ -440,8 +471,8 @@ class App:
         #     pass
 
         pyxel.text(5, 30, ','.join((str(x) for x in [pyxel.mouse_x, pyxel.mouse_y])), pyxel.COLOR_YELLOW)
-        pyxel.text(600, 440, 'None' if self.mode is None else self.mode, 7)
-        pyxel.text(600, 450, 'None' if self.subMode is None else self.subMode, 7)
+        pyxel.text(600, 440, 'None' if self.mode == None else self.mode, 7)
+        pyxel.text(600, 450, 'None' if self.subMode == None else self.subMode, 7)
         
         for wall in self.walls:
             body = wall.body
