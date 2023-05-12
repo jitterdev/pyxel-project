@@ -131,6 +131,22 @@ def delete(**kwargs):
                     self.shapes.remove(shape)
                     break
 
+def move(**kwargs): # this method doesn't work if physics are paused, but that's fine for now
+    self = kwargs['app']
+    if pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
+        hovered_body = get_hovered_body(self.space)
+        if hovered_body:
+            self.mouseJoint = PivotJoint(self.dummy_body, hovered_body, hovered_body.position, self.space)
+            self.space.add(self.mouseJoint.constraint)
+            self.constraints.append(self.mouseJoint)
+    if self.mouseJoint and pyxel.btn(pyxel.MOUSE_BUTTON_LEFT):
+        self.mouseJoint.constraint.anchor_a = (pyxel.mouse_x, pyxel.mouse_y)
+    if self.mouseJoint and pyxel.btnr(pyxel.MOUSE_BUTTON_LEFT):
+        self.space.remove(self.mouseJoint.constraint)
+        self.constraints.remove(self.mouseJoint)
+        self.mouseJoint = None
+
+
 actions = {
     'create': {
         'line': lambda **kwargs: line(**kwargs),
@@ -142,6 +158,7 @@ actions = {
     },
     'edit': {
         'delete': lambda **kwargs: delete(**kwargs),
+        'move': lambda **kwargs: move(**kwargs),
         'None': None
     }
 }
@@ -163,6 +180,7 @@ submodeKeys = {
     },
     'edit': {
         pyxel.KEY_Z: 'delete',
+        pyxel.KEY_X: 'move',
         pyxel.KEY_0: 'None'
     },
 }
@@ -170,7 +188,7 @@ submodeKeys = {
 def leftClick(**kwargs):
     mode = kwargs['app'].mode
     submode = kwargs['app'].subMode
-    if mode:
+    if mode and submode:
         action = actions.get(mode, {})[submode]
         action(**kwargs)
     
@@ -184,7 +202,7 @@ def changeMode(**kwargs):
     self = kwargs['app']
     key = kwargs['key']
     self.mode = modeKeys.get(key)
-    self.subMode = 'None'
+    self.subMode = None
 
 
 submodeKeySet = set()
@@ -241,7 +259,6 @@ class DampedSpring(Constraint): # The spring allows you to define the rest lengt
         self.create_constraint()
     def create_constraint(self):
         self.constraint = pymunk.DampedSpring(self.body_a, self.body_b, self.anchor_a, self.anchor_b, self.rest_angle, self.stiffness, self.dampness)
-
 class GearJoint(Constraint): # GearJoint keeps the angular velocity ratio of a pair of bodies constant.
     def __init__(self, body_a, body_b, phase, ratio, space):
         super().__init__(body_a, body_b, space)
@@ -250,7 +267,6 @@ class GearJoint(Constraint): # GearJoint keeps the angular velocity ratio of a p
         self.create_constraint()
     def create_constraint(self):
         self.constraint = pymunk.GearJoint(self.body_a, self.body_b, self.phase, self.ratio)
-
 class GrooveJoint(Constraint): # GrooveJoint is similar to a PivotJoint, but with a linear slide. One of the anchor points is a line segment that the pivot can slide in instead of being fixed.
     def __init__(self, body_a, body_b, groove_a, groove_b, anchor_b, space):
         super().__init__(body_a, body_b, space)
@@ -260,7 +276,6 @@ class GrooveJoint(Constraint): # GrooveJoint is similar to a PivotJoint, but wit
         self.create_constraint()
     def create_constraint(self):
         self.constraint = pymunk.GrooveJoint(self.body_a, self.body_b, self.groove_a, self.groove_b, self.anchor_b)
-
 class PinJoint(Constraint): # PinJoint links shapes with a solid bar or pin. Keeps the anchor points at a set distance from one another.
     def __init__(self, body_a, body_b, anchor_a, anchor_b, space):
         super().__init__(body_a, body_b, space)
@@ -269,7 +284,6 @@ class PinJoint(Constraint): # PinJoint links shapes with a solid bar or pin. Kee
         self.create_constraint()
     def create_constraint(self):
         self.constraint = pymunk.PinJoint(self.body_a, self.body_b, self.anchor_a, self.anchor_b)
-
 class PivotJoint(Constraint): # PivotJoint allow two objects to pivot about a single point. It's like a swivel.
     def __init__(self, body_a, body_b, pivot, space):
         super().__init__(body_a, body_b, space)
@@ -277,7 +291,11 @@ class PivotJoint(Constraint): # PivotJoint allow two objects to pivot about a si
         self.create_constraint()
     def create_constraint(self):
         self.constraint = pymunk.PivotJoint(self.body_a, self.body_b, self.pivot)
-
+    def draw(self):
+        pyxel.circ(self.pivot.x, self.pivot.y, 2, 0)
+        if self.body_a.body_type != pymunk.Body.STATIC:
+            pyxel.line(self.body_a.position.x, self.body_a.position.y, self.pivot.x, self.pivot.y, 0)
+        pyxel.line(self.body_b.position.x, self.body_b.position.y, self.pivot.x, self.pivot.y, 0)
 class RatchetJoint(Constraint): # RatchetJoint is a rotary ratchet, it works like a socket wrench.
     def __init__(self, body_a, body_b, phase, ratchet, space):
         super().__init__(body_a, body_b, space)
@@ -286,7 +304,6 @@ class RatchetJoint(Constraint): # RatchetJoint is a rotary ratchet, it works lik
         self.create_constraint()
     def create_constraint(self):
         self.constraint = pymunk.RatchetJoint(self.body_a, self.body_b, self.phase, self.ratchet)
-
 class RotaryLimitJoint(Constraint): # RotaryLimitJoint constrains the relative rotations of two bodies.
     def __init__(self, body_a, body_b, min, max, space):
         super().__init__(body_a, body_b, space)
@@ -295,7 +312,6 @@ class RotaryLimitJoint(Constraint): # RotaryLimitJoint constrains the relative r
         self.create_constraint()
     def create_constraint(self):
         self.constraint = pymunk.RotaryLimitJoint(self.body_a, self.body_b, self.min, self.max)
-
 class SimpleMotor(Constraint): # SimpleMotor keeps the relative angular velocity constant.
     def __init__(self, body_a, body_b, rate, space):
         super().__init__(body_a, body_b, space)
@@ -303,7 +319,6 @@ class SimpleMotor(Constraint): # SimpleMotor keeps the relative angular velocity
         self.create_constraint()
     def create_constraint(self):
         self.constraint = pymunk.SimpleMotor(self.body_a, self.body_b, self.rate)
-
 class SlideJoint(Constraint): # SlideJoint is like a PinJoint, but with a minimum and maximum distance. A chain could be modeled using this joint. It keeps the anchor points from getting to far apart, but will allow them to get closer together.
     def __init__(self, body_a, body_b, anchor_a, anchor_b, space):
         super().__init__(body_a, body_b, space)
@@ -312,6 +327,7 @@ class SlideJoint(Constraint): # SlideJoint is like a PinJoint, but with a minimu
         self.create_constraint()
     def create_constraint(self):
         self.constraint = pymunk.SlideJoint(self.body_a, self.body_b, self.anchor_a, self.anchor_b)
+
 
 class Shape:
     def __init__(self, x, y, space):
@@ -418,6 +434,9 @@ class App:
         self.MAX_LINES = 3
         self.mode = None
         self.subMode = None
+        self.dummy_body = pymunk.Body(body_type=pymunk.Body.STATIC)
+        self.mouseJoint = None
+        self.constraints = []
         # create walls
         wall_body = pymunk.Body(body_type=pymunk.Body.STATIC)
         self.walls = [
@@ -465,11 +484,8 @@ class App:
         for shape in self.shapes:
             shape.draw()
             # print_mass_moment(shape.body)
-        # hovered_body = get_hovered_body(self.space)
-        # if hovered_body:
-        #     # pyxel.rect(*hovered_body.position, 10, 10, 9)
-        #     pass
-
+        for constraint in self.constraints:
+            constraint.draw()
         pyxel.text(5, 30, ','.join((str(x) for x in [pyxel.mouse_x, pyxel.mouse_y])), pyxel.COLOR_YELLOW)
         pyxel.text(600, 440, 'None' if self.mode == None else self.mode, 7)
         pyxel.text(600, 450, 'None' if self.subMode == None else self.subMode, 7)
