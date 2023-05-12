@@ -5,7 +5,7 @@ import time
 import math
 
 
-steps = 60 # setting this higher than 60 breaks the line drawing a lot in unpredictable ways
+steps = 60 # setting this higher than 60 isnt a good idea
 speed = 1.0
 dt = speed / steps
 
@@ -52,6 +52,7 @@ debounced_toggle_run_physics = debounce(0.5)(toggle_run_physics)
 def localImpulse(x, y, **kwargs):
     for shape in kwargs['shapes']:
         shape.body.apply_impulse_at_local_point((shape.body.mass*x, shape.body.mass*y))
+
 def randomizeColor(**kwargs):
     for shape in kwargs['shapes']:
         shape.color = random.randint(0,15)
@@ -120,16 +121,45 @@ def rectangle(**kwargs):
         self.point1 = False
         self.point2 = False
 
+def triangle(**kwargs):
+    self = kwargs['app']
+    if pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
+        self.point1 = True
+        self.point2 = False
+        global x1, y1
+        x1, y1 = pyxel.mouse_x, pyxel.mouse_y
+    if self.point1 and not pyxel.btn(pyxel.MOUSE_BUTTON_LEFT):
+        self.point2 = True
+        global x2, y2
+        x2, y2 = pyxel.mouse_x, pyxel.mouse_y
+    if self.point1 and self.point2:
+        width = math.dist([x1], [x2])
+        height = math.dist([y1], [y2])
+        x = (x1+x2)/2
+        y = (y1+y2)/2
+        tri = Triangle(x, y, width, height, self.space)
+        self.shapes.append(tri)
+        self.point1 = False
+        self.point2 = False
+
 def delete(**kwargs):
     self = kwargs['app']
     if pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
         hovered_body = get_hovered_body(self.space)
         if hovered_body:
+            # Check and delete shapes
             for shape in self.shapes:
                 if shape.body == hovered_body:
                     self.space.remove(shape.shape)
                     self.shapes.remove(shape)
                     break
+            # Check and delete lines
+            for line in self.lines:
+                if line.body == hovered_body:
+                    self.space.remove(line.body, line)
+                    self.lines.remove(line)
+                    break
+
 
 def move(**kwargs): # this method doesn't work if physics are paused, but that's fine for now
     self = kwargs['app']
@@ -152,13 +182,25 @@ actions = {
         'line': lambda **kwargs: line(**kwargs),
         'circle': lambda **kwargs: circle(**kwargs),
         'rectangle': lambda **kwargs: rectangle(**kwargs),
-        # 'triangle': lambda **kwargs: triangle(**kwargs),
-        # 'constraint': lambda **kwargs: constraint(**kwargs),
+        'triangle': lambda **kwargs: triangle(**kwargs),
         'None': None
     },
     'edit': {
         'delete': lambda **kwargs: delete(**kwargs),
         'move': lambda **kwargs: move(**kwargs),
+        'None': None
+    },
+    'constraint': {
+        'dampedrotaryspring': None, # no
+        'dampedspring': None, # yes
+        'groovejoint': None, # yes
+        'pivotjoint': None, # yes
+        'pinjoint': None, # yes
+        'pivotjoint': None, # yes
+        'ratchetjoint': None, # no
+        'rotarylimitjoint': None, # no
+        'simplemotor': None, # no
+        'slidejoint': None, # yes
         'None': None
     }
 }
@@ -166,7 +208,7 @@ actions = {
 modeKeys = {
     pyxel.KEY_1: 'create',
     pyxel.KEY_2: 'edit',
-    pyxel.KEY_3: 'delete',
+    pyxel.KEY_3: 'constraint',
 }
 
 submodeKeys = {
@@ -175,7 +217,6 @@ submodeKeys = {
         pyxel.KEY_X: 'circle',
         pyxel.KEY_C: 'rectangle',
         pyxel.KEY_V: 'triangle',
-        pyxel.KEY_B: 'constraint',
         pyxel.KEY_0: 'None'
     },
     'edit': {
@@ -183,6 +224,20 @@ submodeKeys = {
         pyxel.KEY_X: 'move',
         pyxel.KEY_0: 'None'
     },
+    'constraint': {
+        pyxel.KEY_Q: 'dampedrotaryspring',
+        pyxel.KEY_W: 'dampedspring',
+        pyxel.KEY_E: 'gearjoint',
+        pyxel.KEY_R: 'groovejoint',
+        pyxel.KEY_T: 'pivotjoint',
+        pyxel.KEY_Y: 'pinjoint',
+        pyxel.KEY_U: 'pivotjoint',
+        pyxel.KEY_I: 'ratchetjoint',
+        pyxel.KEY_O: 'rotarylimitjoint',
+        pyxel.KEY_P: 'simplemotor',
+        pyxel.KEY_A: 'slidejoint',
+        pyxel.KEY_0: 'None'
+    }
 }
 
 def leftClick(**kwargs):
@@ -419,6 +474,57 @@ class Rectangle(Shape):
             x2, y2 = vertices[(i+1)%4]
             pyxel.line(x1, y1, x2, y2, self.color)
 
+class Triangle(Shape):
+    def __init__(self, x, y, width, height, space):
+        super().__init__(x, y, space)
+        vertices = [(-width/2, -height/2), (width/2, -height/2), (0, height/2)]
+        self.shape = pymunk.Poly(self.body, vertices)
+        self.shape.density = .05
+        self.shape.elasticity = 0.8
+        self.width = width
+        self.height = height
+        self.space.add(self.shape)
+        self.body.moment = pymunk.moment_for_poly(self.shape.mass, self.shape.get_vertices())
+        self.angle = 0
+    
+    def draw(self):
+        x, y = self.body.position
+        angle = math.degrees(self.body.angle)
+        width = self.width
+        height = self.height
+        
+        # Adjust position if outside the bounds of the window
+        if x - width/2 < 0:
+            x = width/2
+        elif x + width/2 > pyxel.width:
+            x = pyxel.width - width/2
+        
+        if y - height/2 < 0:
+            y = height/2
+        elif y + height/2 > pyxel.height:
+            y = pyxel.height - height/2
+        
+        self.body.position = x, y
+
+        # Compute vertices of rotated triangle
+        vertices = self.shape.get_vertices()
+        rotated_vertices = []
+        cx, cy = x, y
+        ca, sa = math.cos(self.body.angle), math.sin(self.body.angle)
+        
+        # Rotate vertices around the center of the triangle
+        for vertex in vertices:
+            vx, vy = vertex
+            rx = cx + ca * vx - sa * vy
+            ry = cy + sa * vx + ca * vy
+            rotated_vertices.append((rx, ry))
+        
+        # Draw the rotated triangle
+        for i in range(3):
+            x1, y1 = rotated_vertices[i]
+            x2, y2 = rotated_vertices[(i+1) % 3]
+            pyxel.line(x1, y1, x2, y2, self.color)
+
 
 class App:
     def __init__(self):
@@ -459,9 +565,6 @@ class App:
             'shapes': self.shapes,
             'key': None
         }
-        # for _ in range(50):
-        #     rect = Rectangle(random.randint(50,590), random.randint(50,430), random.randint(20,40), random.randint(20,40), self.space)
-        #     self.shapes.append(rect)
         pyxel.run(self.update, self.draw)
 
     def update(self):
@@ -477,7 +580,7 @@ class App:
         # print(self.run_physics)
         if self.run_physics:
             for _ in range(steps): # move simulation forward 0.1 seconds:
-                self.space.step(dt / steps)
+                self.space.step((dt / steps)*speed)
 
     def draw(self):
         pyxel.cls(1)
