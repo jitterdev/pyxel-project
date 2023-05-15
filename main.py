@@ -37,12 +37,14 @@ def debounce(wait_time):
 def print_mass_moment(b):
     print("mass={:.0f} moment={:.0f}".format(b.mass, b.moment))
 
-def get_hovered_body(space):
+def get_hovered_body(app):
+    self = app
     x, y = pyxel.mouse_x, pyxel.mouse_y
-    point = space.point_query((x, y), 0, pymunk.ShapeFilter())
-    if point:
-        shape = point[0].shape
+    point = self.space.point_query_nearest((x, y), 0, pymunk.ShapeFilter())
+    if point and point.shape not in self.walls:
+        shape = point.shape
         return shape.body
+
 
 def toggle_run_physics(**kwargs):
     setattr(kwargs['app'], 'run_physics', not kwargs['app'].run_physics)
@@ -142,10 +144,33 @@ def triangle(**kwargs):
         self.point1 = False
         self.point2 = False
 
+def softbody(**kwargs):
+    self = kwargs['app']
+    
+    if pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
+        self.point1 = True
+        self.point2 = False
+        global x1, y1
+        x1, y1 = pyxel.mouse_x, pyxel.mouse_y
+        
+    if self.point1 and not pyxel.btn(pyxel.MOUSE_BUTTON_LEFT):
+        self.point2 = True
+        global x2, y2
+        x2, y2 = pyxel.mouse_x, pyxel.mouse_y
+        
+    if self.point1 and self.point2:
+        # Create a soft body object
+        sb = SoftBody(x1, y1, x2, y2, self.space)
+        self.shapes.append(sb)
+        
+        self.point1 = False
+        self.point2 = False
+
+
 def delete(**kwargs):
     self = kwargs['app']
     if pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
-        hovered_body = get_hovered_body(self.space)
+        hovered_body = get_hovered_body(self)
         if hovered_body:
             # Check and delete shapes
             for shape in self.shapes:
@@ -164,11 +189,11 @@ def delete(**kwargs):
 def move(**kwargs): # this method doesn't work if physics are paused, but that's fine for now
     self = kwargs['app']
     if pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
-        hovered_body = get_hovered_body(self.space)
+        hovered_body = get_hovered_body(self)
         if hovered_body:
             self.mouseJoint = PivotJoint(self.dummy_body, hovered_body, hovered_body.position, self.space)
-            self.space.add(self.mouseJoint.constraint)
             self.constraints.append(self.mouseJoint)
+            self.mouseJoint.add_to_space()
     if self.mouseJoint and pyxel.btn(pyxel.MOUSE_BUTTON_LEFT):
         self.mouseJoint.constraint.anchor_a = (pyxel.mouse_x, pyxel.mouse_y)
     if self.mouseJoint and pyxel.btnr(pyxel.MOUSE_BUTTON_LEFT):
@@ -183,24 +208,12 @@ actions = {
         'circle': lambda **kwargs: circle(**kwargs),
         'rectangle': lambda **kwargs: rectangle(**kwargs),
         'triangle': lambda **kwargs: triangle(**kwargs),
+        'softbody': lambda **kwargs: softbody(**kwargs),
         'None': None
     },
     'edit': {
         'delete': lambda **kwargs: delete(**kwargs),
         'move': lambda **kwargs: move(**kwargs),
-        'None': None
-    },
-    'constraint': {
-        'dampedrotaryspring': None, # no
-        'dampedspring': None, # yes
-        'groovejoint': None, # yes
-        'pivotjoint': None, # yes
-        'pinjoint': None, # yes
-        'pivotjoint': None, # yes
-        'ratchetjoint': None, # no
-        'rotarylimitjoint': None, # no
-        'simplemotor': None, # no
-        'slidejoint': None, # yes
         'None': None
     }
 }
@@ -208,7 +221,6 @@ actions = {
 modeKeys = {
     pyxel.KEY_1: 'create',
     pyxel.KEY_2: 'edit',
-    pyxel.KEY_3: 'constraint',
 }
 
 submodeKeys = {
@@ -217,25 +229,12 @@ submodeKeys = {
         pyxel.KEY_X: 'circle',
         pyxel.KEY_C: 'rectangle',
         pyxel.KEY_V: 'triangle',
+        pyxel.KEY_B: 'softbody',
         pyxel.KEY_0: 'None'
     },
     'edit': {
         pyxel.KEY_Z: 'delete',
         pyxel.KEY_X: 'move',
-        pyxel.KEY_0: 'None'
-    },
-    'constraint': {
-        pyxel.KEY_Q: 'dampedrotaryspring',
-        pyxel.KEY_W: 'dampedspring',
-        pyxel.KEY_E: 'gearjoint',
-        pyxel.KEY_R: 'groovejoint',
-        pyxel.KEY_T: 'pivotjoint',
-        pyxel.KEY_Y: 'pinjoint',
-        pyxel.KEY_U: 'pivotjoint',
-        pyxel.KEY_I: 'ratchetjoint',
-        pyxel.KEY_O: 'rotarylimitjoint',
-        pyxel.KEY_P: 'simplemotor',
-        pyxel.KEY_A: 'slidejoint',
         pyxel.KEY_0: 'None'
     }
 }
@@ -374,14 +373,16 @@ class SimpleMotor(Constraint): # SimpleMotor keeps the relative angular velocity
         self.create_constraint()
     def create_constraint(self):
         self.constraint = pymunk.SimpleMotor(self.body_a, self.body_b, self.rate)
-class SlideJoint(Constraint): # SlideJoint is like a PinJoint, but with a minimum and maximum distance. A chain could be modeled using this joint. It keeps the anchor points from getting to far apart, but will allow them to get closer together.
-    def __init__(self, body_a, body_b, anchor_a, anchor_b, space):
+class SlideJoint(Constraint): 
+    def __init__(self, body_a, body_b, anchor_a, anchor_b, min, max, space):
         super().__init__(body_a, body_b, space)
         self.anchor_a = anchor_a
         self.anchor_b = anchor_b
+        self.min = min
+        self.max = max
         self.create_constraint()
     def create_constraint(self):
-        self.constraint = pymunk.SlideJoint(self.body_a, self.body_b, self.anchor_a, self.anchor_b)
+        self.constraint = pymunk.SlideJoint(self.body_a, self.body_b, self.anchor_a, self.anchor_b, self.min, self.max)
 
 
 class Shape:
@@ -525,8 +526,91 @@ class Triangle(Shape):
             x2, y2 = rotated_vertices[(i+1) % 3]
             pyxel.line(x1, y1, x2, y2, self.color)
 
+class SoftBody:
+    def __init__(self, x1, y1, x2, y2, space):
+        self.space = space
+        self.points = self.create_soft_body_points(x1, y1, x2, y2)
+        self.constraints = self.connect_points_with_constraints()
 
-class App:
+    def create_soft_body_points(self, x1, y1, x2, y2):
+        points = []
+        width = abs(x2 - x1)
+        height = abs(y2 - y1)
+        radius = 6
+
+        num_points_x = max(int(width / (radius * 2)), 1)
+        num_points_y = max(int(height / (radius * 2)), 1)
+
+        for i in range(num_points_x):
+            for j in range(num_points_y):
+                t = i / (num_points_x - 1)
+                u = j / (num_points_y - 1)
+                x = x1 + width * t
+                y = y1 + height * u
+
+                body = pymunk.Body(1, pymunk.moment_for_circle(1, 0, radius))
+                body.position = x, y
+                body.velocity_limit = 300
+                body.angular_velocity_limit = 300
+                shape = pymunk.Circle(body, radius)
+                shape.density = 0.5
+                shape.elasticity = 0.2
+                shape.friction = 0.5
+                self.space.add(body, shape)
+                points.append(shape)
+
+        return points
+
+    def connect_points_with_constraints(self):
+        constraints = []
+
+        num_points_x = int((abs(self.points[0].body.position.x - self.points[-1].body.position.x)) / (self.points[0].radius * 2))
+        num_points_y = int((abs(self.points[0].body.position.y - self.points[-1].body.position.y)) / (self.points[0].radius * 2))
+
+        for i in range(num_points_x):
+            for j in range(num_points_y):
+                index = i * num_points_y + j
+
+                if i < num_points_x - 1 and j < num_points_y - 1:
+                    body1 = self.points[index].body
+                    body2 = self.points[index + num_points_y + 1].body
+                    constraint = SlideJoint(
+                        body1, body2, (self.points[index].radius, self.points[index].radius),
+                        (-self.points[index].radius, -self.points[index].radius), 0, self.points[index].radius * 2, self.space
+                    )
+                    constraints.append(constraint)
+                    constraint.add_to_space()
+
+                if i < num_points_x - 1 and j > 0:
+                    body1 = self.points[index].body
+                    body2 = self.points[index + num_points_y - 1].body
+                    constraint = SlideJoint(
+                        body1, body2, (self.points[index].radius, -self.points[index].radius),
+                        (-self.points[index].radius, self.points[index].radius), 0, self.points[index].radius * 2, self.space
+                    )
+                    constraints.append(constraint)
+                    constraint.add_to_space()
+
+        return constraints
+
+
+    def apply_force_to_points(self, force):
+        for point in self.points:
+            point.body.apply_force_at_local_point(force)
+
+    def draw(self):
+        for point in self.points:
+            pos = point.body.position
+            x, y = int(pos.x), int(pos.y)
+            pyxel.circ(x, y, point.radius, 5)
+
+        for constraint in self.constraints:
+            a, b = constraint.body_a.position, constraint.body_b.position
+            pyxel.line(int(a.x), int(a.y), int(b.x), int(b.y), 7)
+
+
+
+class App():
     def __init__(self):
         pyxel.init(640, 480, fps=steps)
         pyxel.mouse(True)
@@ -556,9 +640,9 @@ class App:
             wall.friction = 0.8
         self.space.add(wall_body, *self.walls)
         self.shapes = []
-        for _ in range(150):
-            circle = Circle(random.randint(50,590), random.randint(50,430), random.randint(5,15), self.space)
-            self.shapes.append(circle)
+        # for _ in range(150):
+        #     circle = Circle(random.randint(50,590), random.randint(50,430), random.randint(5,15), self.space)
+        #     self.shapes.append(circle)
         self.args = {
             'color': self.color,
             'app': self,
