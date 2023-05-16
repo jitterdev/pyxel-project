@@ -526,9 +526,12 @@ class Triangle(Shape):
             x2, y2 = rotated_vertices[(i+1) % 3]
             pyxel.line(x1, y1, x2, y2, self.color)
 
-class SoftBody:
+
+
+
+class SoftBody(Shape):
     def __init__(self, x1, y1, x2, y2, space):
-        self.space = space
+        super().__init__(x1, y1, space)
         self.points = self.create_soft_body_points(x1, y1, x2, y2)
         self.constraints = self.connect_points_with_constraints()
 
@@ -536,7 +539,7 @@ class SoftBody:
         points = []
         width = abs(x2 - x1)
         height = abs(y2 - y1)
-        radius = 6
+        radius = 5
 
         num_points_x = max(int(width / (radius * 2)), 1)
         num_points_y = max(int(height / (radius * 2)), 1)
@@ -569,33 +572,54 @@ class SoftBody:
 
         for i in range(num_points_x):
             for j in range(num_points_y):
-                index = i * num_points_y + j
+                index = j * num_points_x + i
 
-                if i < num_points_x - 1 and j < num_points_y - 1:
+                if i < num_points_x - 1:
                     body1 = self.points[index].body
-                    body2 = self.points[index + num_points_y + 1].body
-                    constraint = SlideJoint(
-                        body1, body2, (self.points[index].radius, self.points[index].radius),
-                        (-self.points[index].radius, -self.points[index].radius), 0, self.points[index].radius * 2, self.space
-                    )
+                    body2 = self.points[index + 1].body
+                    constraint = SlideJoint(body1, body2, (0, 0), (0, 0), 0, self.points[index].radius * 2, self.space)
                     constraints.append(constraint)
                     constraint.add_to_space()
 
-                if i < num_points_x - 1 and j > 0:
+                if j < num_points_y - 1:
                     body1 = self.points[index].body
-                    body2 = self.points[index + num_points_y - 1].body
-                    constraint = SlideJoint(
-                        body1, body2, (self.points[index].radius, -self.points[index].radius),
-                        (-self.points[index].radius, self.points[index].radius), 0, self.points[index].radius * 2, self.space
-                    )
+                    body2 = self.points[index + num_points_x].body
+                    constraint = SlideJoint(body1, body2, (0, 0), (0, 0), 0, self.points[index].radius * 2, self.space)
+                    constraints.append(constraint)
+                    constraint.add_to_space()
+
+                if i < num_points_x - 1 and j < num_points_y - 1:
+                    body1 = self.points[index].body
+                    body2 = self.points[index + num_points_x + 1].body
+                    constraint = SlideJoint(body1, body2, (0, 0), (0, 0), 0, self.points[index].radius * 2, self.space)
+                    constraints.append(constraint)
+                    constraint.add_to_space()
+
+                if i > 0 and j < num_points_y - 1:
+                    body1 = self.points[index].body
+                    body2 = self.points[index + num_points_x - 1].body
+                    constraint = SlideJoint(body1, body2, (0, 0), (0, 0), 0, self.points[index].radius * 2, self.space)
+                    constraints.append(constraint)
+                    constraint.add_to_space()
+
+                if i < num_points_x - 1 and j < num_points_y - 1:
+                    body1 = self.points[index].body
+                    body2 = self.points[index + num_points_x + 2].body
+                    constraint = SlideJoint(body1, body2, (0, 0), (0, 0), 0, self.points[index].radius * 2, self.space)
                     constraints.append(constraint)
                     constraint.add_to_space()
 
         return constraints
 
 
-    def apply_force_to_points(self, force):
+
+
+
+    def return_to_original_form(self):
         for point in self.points:
+            x, y = point.body.position
+            original_x, original_y = point.original_position
+            force = (original_x - x, original_y - y)
             point.body.apply_force_at_local_point(force)
 
     def draw(self):
@@ -605,8 +629,11 @@ class SoftBody:
             pyxel.circ(x, y, point.radius, 5)
 
         for constraint in self.constraints:
-            a, b = constraint.body_a.position, constraint.body_b.position
+            a, b = constraint.constraint.a.local_to_world(constraint.constraint.anchor_a), constraint.constraint.b.local_to_world(constraint.constraint.anchor_b)
             pyxel.line(int(a.x), int(a.y), int(b.x), int(b.y), 7)
+
+
+
 
 
 
