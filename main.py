@@ -526,116 +526,94 @@ class Triangle(Shape):
             x2, y2 = rotated_vertices[(i+1) % 3]
             pyxel.line(x1, y1, x2, y2, self.color)
 
-
-
-
 class SoftBody(Shape):
     def __init__(self, x1, y1, x2, y2, space):
         super().__init__(x1, y1, space)
-        self.points = self.create_soft_body_points(x1, y1, x2, y2)
+        self.x1 = x1
+        self.y1 = y1
+        self.x2 = x2
+        self.y2 = y2
+        self.radius = 6
+        self.points = self.create_soft_body_points()
         self.constraints = self.connect_points_with_constraints()
 
-    def create_soft_body_points(self, x1, y1, x2, y2):
-        points = []
-        width = abs(x2 - x1)
-        height = abs(y2 - y1)
-        radius = 5
+    def create_soft_body_points(self):
+        self.points = []
+        self.width = abs(self.x2 - self.x1)
+        self.height = abs(self.y2 - self.y1)
 
-        num_points_x = max(int(width / (radius * 2)), 1)
-        num_points_y = max(int(height / (radius * 2)), 1)
+        num_points_x = max(int(self.width / (self.radius * 2)), 1)
+        num_points_y = max(int(self.height / (self.radius * 2)), 1)
 
         for i in range(num_points_x):
             for j in range(num_points_y):
                 t = i / (num_points_x - 1)
                 u = j / (num_points_y - 1)
-                x = x1 + width * t
-                y = y1 + height * u
+                x = self.x1 + self.width * t
+                y = self.y1 + self.height * u
 
-                body = pymunk.Body(1, pymunk.moment_for_circle(1, 0, radius))
+                body = pymunk.Body(1, pymunk.moment_for_circle(1, 0, self.radius))
                 body.position = x, y
                 body.velocity_limit = 300
                 body.angular_velocity_limit = 300
-                shape = pymunk.Circle(body, radius)
+                shape = pymunk.Circle(body, self.radius)
                 shape.density = 0.5
                 shape.elasticity = 0.2
                 shape.friction = 0.5
                 self.space.add(body, shape)
-                points.append(shape)
+                self.points.append(shape)
 
-        return points
+        return self.points
 
     def connect_points_with_constraints(self):
         constraints = []
 
-        num_points_x = int((abs(self.points[0].body.position.x - self.points[-1].body.position.x)) / (self.points[0].radius * 2))
-        num_points_y = int((abs(self.points[0].body.position.y - self.points[-1].body.position.y)) / (self.points[0].radius * 2))
+        num_points_x = int(self.width / (self.radius * 2))
+        self.num_points_y = int(self.height / (self.radius * 2))
 
         for i in range(num_points_x):
-            for j in range(num_points_y):
-                index = j * num_points_x + i
+            for j in range(self.num_points_y):
+                index = i * self.num_points_y + j
 
                 if i < num_points_x - 1:
                     body1 = self.points[index].body
+                    body2 = self.points[index + self.num_points_y].body
+
+                    # Horizontal SlideJoint constraint
+                    distance = body1.position.get_distance(body2.position)
+                    constraint = pymunk.SlideJoint(
+                        body1, body2, (self.radius * 2, 0), (0, -self.radius * 2),
+                        distance, distance
+                    )
+                    constraints.append(constraint)
+                    self.space.add(constraint)
+
+                if j < self.num_points_y - 1:
+                    body1 = self.points[index].body
                     body2 = self.points[index + 1].body
-                    constraint = SlideJoint(body1, body2, (0, 0), (0, 0), 0, self.points[index].radius * 2, self.space)
-                    constraints.append(constraint)
-                    constraint.add_to_space()
 
-                if j < num_points_y - 1:
-                    body1 = self.points[index].body
-                    body2 = self.points[index + num_points_x].body
-                    constraint = SlideJoint(body1, body2, (0, 0), (0, 0), 0, self.points[index].radius * 2, self.space)
+                    # Vertical SlideJoint constraint
+                    distance = body1.position.get_distance(body2.position)
+                    constraint = pymunk.SlideJoint(
+                        body1, body2, (0, self.radius * 2), (-self.radius * 2, 0),
+                        distance, distance
+                    )
                     constraints.append(constraint)
-                    constraint.add_to_space()
-
-                if i < num_points_x - 1 and j < num_points_y - 1:
-                    body1 = self.points[index].body
-                    body2 = self.points[index + num_points_x + 1].body
-                    constraint = SlideJoint(body1, body2, (0, 0), (0, 0), 0, self.points[index].radius * 2, self.space)
-                    constraints.append(constraint)
-                    constraint.add_to_space()
-
-                if i > 0 and j < num_points_y - 1:
-                    body1 = self.points[index].body
-                    body2 = self.points[index + num_points_x - 1].body
-                    constraint = SlideJoint(body1, body2, (0, 0), (0, 0), 0, self.points[index].radius * 2, self.space)
-                    constraints.append(constraint)
-                    constraint.add_to_space()
-
-                if i < num_points_x - 1 and j < num_points_y - 1:
-                    body1 = self.points[index].body
-                    body2 = self.points[index + num_points_x + 2].body
-                    constraint = SlideJoint(body1, body2, (0, 0), (0, 0), 0, self.points[index].radius * 2, self.space)
-                    constraints.append(constraint)
-                    constraint.add_to_space()
+                    self.space.add(constraint)
 
         return constraints
 
-
-
-
-
-    def return_to_original_form(self):
+    def apply_force_to_points(self, force):
         for point in self.points:
-            x, y = point.body.position
-            original_x, original_y = point.original_position
-            force = (original_x - x, original_y - y)
             point.body.apply_force_at_local_point(force)
 
     def draw(self):
+        for constraint in self.constraints:
+            pyxel.line(constraint.a.position.x, constraint.a.position.y, constraint.b.position.x, constraint.b.position.y, 3)
         for point in self.points:
             pos = point.body.position
             x, y = int(pos.x), int(pos.y)
-            pyxel.circ(x, y, point.radius, 5)
-
-        for constraint in self.constraints:
-            a, b = constraint.constraint.a.local_to_world(constraint.constraint.anchor_a), constraint.constraint.b.local_to_world(constraint.constraint.anchor_b)
-            pyxel.line(int(a.x), int(a.y), int(b.x), int(b.y), 7)
-
-
-
-
-
+            pyxel.circ(x, y, point.radius, self.color)
 
 class App():
     def __init__(self):
