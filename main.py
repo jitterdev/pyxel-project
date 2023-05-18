@@ -544,7 +544,8 @@ class SoftBody(Shape):
 
         num_points_x = max(int(self.width / (self.radius * 2)), 1)
         num_points_y = max(int(self.height / (self.radius * 2)), 1)
-
+        if num_points_x <= 1 or num_points_y <= 1:
+            return
         for i in range(num_points_x):
             for j in range(num_points_y):
                 t = i / (num_points_x - 1)
@@ -570,7 +571,8 @@ class SoftBody(Shape):
 
         num_points_x = int(self.width / (self.radius * 2))
         self.num_points_y = int(self.height / (self.radius * 2))
-
+        if num_points_x <= 1 or self.num_points_y <= 1:
+            return
         for i in range(num_points_x):
             for j in range(self.num_points_y):
                 index = i * self.num_points_y + j
@@ -608,12 +610,13 @@ class SoftBody(Shape):
             point.body.apply_force_at_local_point(force)
 
     def draw(self):
-        for constraint in self.constraints:
-            pyxel.line(constraint.a.position.x, constraint.a.position.y, constraint.b.position.x, constraint.b.position.y, 3)
-        for point in self.points:
-            pos = point.body.position
-            x, y = int(pos.x), int(pos.y)
-            pyxel.circ(x, y, point.radius, self.color)
+        if self.constraints and self.points:
+            for constraint in self.constraints:
+                pyxel.line(constraint.a.position.x, constraint.a.position.y, constraint.b.position.x, constraint.b.position.y, 3)
+            for point in self.points:
+                pos = point.body.position
+                x, y = int(pos.x), int(pos.y)
+                pyxel.circ(x, y, point.radius, self.color)
 
 class App():
     def __init__(self):
